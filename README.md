@@ -35,6 +35,26 @@ MySQL 连接：`inkmill` / `inkmill` / `inkmill`（库名/用户/密码）
 3. **ViscositySample**：`millId`, `sampledAt`, `viscosityPaS`（须 &gt; 0，否则 HTTP 400）, `tempC`, `notes`
 4. **GrindPass**：`millId`, `startedAt`, `passNo`（≥ 1）, `durationMin`（&gt; 0）, `mediaType`, `operatorName`
 5. **Dashboard**：`workshopTotal`, `grindingMillCount`, `samplesLast24h`, `passesLast7d`
+6. **Utilization（利用率看板）**：按机台读库聚合 `GrindPass.durationMin`，字段 `millId` / `millCode` / `workshopId` / `totalMinutes` / `passCount` / `utilizationRatio`
+
+## 研磨机利用率口径
+
+- 接口：`GET /api/utilization`（需登录）
+  - 查询参数 `days`：统计窗口天数，**默认 7**，取值 1~365，非法值返回 HTTP 400。
+  - 查询参数 `millId`：可选，仅统计指定研磨机；机台不存在返回 HTTP 404；不传则返回全部机台。
+  - 仅统计 `startedAt` 落在最近 `days` 天内的研磨遍次。
+- 每机返回：
+  - `totalMinutes`：窗口内 `SUM(durationMin)`（数据库聚合，前端不造分钟数）。
+  - `passCount`：窗口内遍次条数 `COUNT(*)`。
+  - `utilizationRatio`：相对窗口内**理论满负荷**的占比，公式为
+
+    ```
+    utilizationRatio = min(1, totalMinutes / (days * 8 * 60))
+    ```
+
+    即按每机每天额定 **8 小时（480 分钟）** 计，结果封顶为 1（100%）。
+- 顶层同时返回 `days` 与 `theoreticalMinutesPerMill`（= `days*8*60`），便于前端展示口径。
+- 前端「利用率」侧栏页：表格列出各机分钟数 / 遍次数 / 利用率，并配简单条形；可在 近 7 / 14 / 30 天窗口间切换，亦可按机台筛选。所有数值均来自该接口。
 
 ## 快速启动（Docker）
 

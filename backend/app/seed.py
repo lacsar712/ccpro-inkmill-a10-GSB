@@ -10,6 +10,56 @@ from app.models.viscosity_sample import ViscositySample
 from app.models.workshop import Workshop
 
 
+def _pass(now, mill_id, days_ago, hours_ago, pass_no, duration, media, operator):
+    return GrindPass(
+        mill_id=mill_id,
+        started_at=now - timedelta(days=days_ago, hours=hours_ago),
+        pass_no=pass_no,
+        duration_min=Decimal(str(duration)),
+        media_type=media,
+        operator_name=operator,
+    )
+
+
+def _recent_passes(now, mills):
+    """构造近 7 日研磨遍次：按天铺开，保证利用率看板有足够数据读库聚合。"""
+    by_code = {m.mill_code: m.id for m in mills}
+    m1, m2, m3 = by_code["M-01"], by_code["M-02"], by_code["M-A1"]
+
+    passes = []
+
+    # M-01：满负荷主力线，每天 2 遍
+    m1_durations = [
+        (75, 50),
+        (95, 70),
+        (120, 90),
+        (60, 45),
+        (140, 80),
+        (85, 65),
+        (110, 75),
+    ]
+    pn = 0
+    for days_ago, (d1, d2) in enumerate(m1_durations):
+        pn += 1
+        passes.append(_pass(now, m1, days_ago, 9, pn, d1, "0.8mm 锆珠", "张研磨"))
+        pn += 1
+        passes.append(_pass(now, m1, days_ago, 4, pn, d2, "0.8mm 锆珠", "张研磨"))
+
+    # M-02：间歇生产，隔日 1 遍
+    for i, (days_ago, hours_ago, dur) in enumerate(
+        [(1, 4, 90), (3, 6, 120), (5, 5, 75)], start=1
+    ):
+        passes.append(_pass(now, m2, days_ago, hours_ago, i, dur, "1.0mm 玻璃珠", "李工"))
+
+    # M-A1：少量试产
+    for i, (days_ago, hours_ago, dur) in enumerate(
+        [(2, 3, 60), (6, 7, 45)], start=1
+    ):
+        passes.append(_pass(now, m3, days_ago, hours_ago, i, dur, "1.2mm 锆珠", "赵工"))
+
+    return passes
+
+
 def seed() -> None:
     db = SessionLocal()
     try:
@@ -28,7 +78,10 @@ def seed() -> None:
                 )
         db.commit()
 
-        if db.query(Workshop).count() == 0:
+        fresh = db.query(Workshop).count() == 0
+        now = datetime.now()
+
+        if fresh:
             w1 = Workshop(name="一号油墨车间", site="厂区 A 栋", notes="高固含色浆线")
             w2 = Workshop(name="调墨中心", site="厂区 B 栋", notes="小批量专色")
             db.add_all([w1, w2])
@@ -58,7 +111,6 @@ def seed() -> None:
             db.add_all([m1, m2, m3])
             db.flush()
 
-            now = datetime.now()
             db.add_all(
                 [
                     ViscositySample(
@@ -82,36 +134,26 @@ def seed() -> None:
                         temp_c=Decimal("27.00"),
                         notes=None,
                     ),
-                    GrindPass(
-                        mill_id=m1.id,
-                        started_at=now - timedelta(hours=3),
-                        pass_no=1,
-                        duration_min=Decimal("45.00"),
-                        media_type="0.8mm 锆珠",
-                        operator_name="张研磨",
-                    ),
-                    GrindPass(
-                        mill_id=m1.id,
-                        started_at=now - timedelta(hours=2),
-                        pass_no=2,
-                        duration_min=Decimal("38.00"),
-                        media_type="0.8mm 锆珠",
-                        operator_name="张研磨",
-                    ),
-                    GrindPass(
-                        mill_id=m2.id,
-                        started_at=now - timedelta(days=5),
-                        pass_no=1,
-                        duration_min=Decimal("60.00"),
-                        media_type="1.0mm 玻璃珠",
-                        operator_name="李工",
-                    ),
                 ]
             )
-            db.commit()
-            print("Seed data inserted.")
-        else:
-            print("Seed skipped (workshops exist).")
+            print("Seed workshops / mills / samples inserted.")
+
+        # 近 7 日遍次幂等补齐：仅当窗口内完全没有遍次时写入，
+        # 这样旧库重新 seed 也能保证利用率看板有数据，且不重复造数。
+        mills = db.query(Mill).order_by(Mill.id).all()
+        week_ago = now - timedelta(days=7)
+        recent_count = (
+            db.query(GrindPass)
+            .filter(GrindPass.started_at >= week_ago)
+            .count()
+        )
+        if mills and recent_count == 0:
+            db.add_all(_recent_passes(now, mills))
+            print("Recent 7-day grind passes inserted.")
+
+        db.commit()
+        if not fresh and recent_count != 0:
+            print("Seed skipped (data already present).")
     finally:
         db.close()
 
