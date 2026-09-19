@@ -50,3 +50,21 @@ export interface DashboardStats {
   samplesLast24h: number;
   passesLast7d: number;
 }
+
+export interface UtilizationItem {
+  millId: number;
+  millCode: string;
+  workshopId: number;
+  passCount: number;
+  totalMinutes: number;
+  utilizationRatio: number;
+}
+
+export interface UtilizationReport {
+  days: number;
+  windowStart: string;
+  windowEnd: string;
+  shiftHoursPerDay: number;
+  fullLoadMinutesPerMill: number;
+  items: UtilizationItem[];
+}

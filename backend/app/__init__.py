@@ -3,7 +3,7 @@ from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 
 from app.config import settings
-from app.routes import auth, dashboard, grind_passes, mills, viscosity_samples, workshops
+from app.routes import auth, dashboard, grind_passes, mills, utilization, viscosity_samples, workshops
 
 
 def create_app() -> Flask:
@@ -32,6 +32,7 @@ def create_app() -> Flask:
     app.register_blueprint(mills.bp)
     app.register_blueprint(viscosity_samples.bp)
     app.register_blueprint(grind_passes.bp)
+    app.register_blueprint(utilization.bp)
 
     @app.get("/api/health")
     def health():

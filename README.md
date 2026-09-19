@@ -35,6 +35,31 @@ MySQL 连接：`inkmill` / `inkmill` / `inkmill`（库名/用户/密码）
 3. **ViscositySample**：`millId`, `sampledAt`, `viscosityPaS`（须 &gt; 0，否则 HTTP 400）, `tempC`, `notes`
 4. **GrindPass**：`millId`, `startedAt`, `passNo`（≥ 1）, `durationMin`（&gt; 0）, `mediaType`, `operatorName`
 5. **Dashboard**：`workshopTotal`, `grindingMillCount`, `samplesLast24h`, `passesLast7d`
+6. **Utilization**：`days`, `windowStart`, `windowEnd`, `shiftHoursPerDay`, `fullLoadMinutesPerMill`, `items[]`（`millId`, `millCode`, `workshopId`, `passCount`, `totalMinutes`, `utilizationRatio`）
+
+## 利用率看板（GET /api/utilization）
+
+按 `GrindPass.durationMin` 在数据库内聚合（`SUM` / `COUNT`），前端只渲染接口结果，不自行估算分钟数。
+
+**查询参数**
+
+| 参数 | 默认 | 说明 |
+|------|------|------|
+| `days` | `7` | 统计窗口天数，整数，范围 1~90，越界返回 400 |
+| `millId` | （空） | 可选，只统计指定研磨机 |
+
+**口径**
+
+- 窗口：`startedAt ≥ now - days 天`（含边界），响应中的 `windowStart` / `windowEnd` 为实际窗口。
+- `totalMinutes`：窗口内该机全部遍次 `durationMin` 之和（数据库 `SUM`，无遍次为 0）。
+- `passCount`：窗口内遍次数（数据库 `COUNT`）。
+- 理论满负荷简化为**每机每天 1 班 × 8 小时**：`fullLoadMinutesPerMill = days × 8 × 60`。
+- `utilizationRatio = min(1, totalMinutes / fullLoadMinutesPerMill)`，保留 4 位小数，封顶 1（即 100%）。
+- 无遍次的机台也会出现在 `items` 中（`totalMinutes = 0`，`utilizationRatio = 0`）。
+
+示例：`GET /api/utilization?days=14&millId=2`
+
+前端「利用率」页提供近 7 / 14 / 30 天窗口切换与单机筛选，表格 + 条形展示。
 
 ## 快速启动（Docker）
 
@@ -50,7 +75,7 @@ docker compose up --build -d
 
 1. 等待 MySQL 就绪（`DB_HOST=mysql`）
 2. SQLAlchemy `create_all` 建表
-3. `SEED_ON_START=true` 时写入演示数据
+3. `SEED_ON_START=true` 时写入演示数据（含近 7 日各机台研磨遍次，供利用率看板聚合）
 4. gunicorn 监听 `0.0.0.0:9200`
 
 健康检查：`GET /api/health` → `{"status":"ok","service":"InkMill"}`

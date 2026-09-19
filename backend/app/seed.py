@@ -82,30 +82,39 @@ def seed() -> None:
                         temp_c=Decimal("27.00"),
                         notes=None,
                     ),
+                ]
+            )
+
+            # 近 7 日研磨遍次:每台机都有数据,利用率看板可直接聚合
+            pass_specs = [
+                # (mill, 几天前, 再提前几小时, 遍次, 分钟, 介质, 操作员)
+                (m1, 0, 3, 1, "45.00", "0.8mm 锆珠", "张研磨"),
+                (m1, 0, 2, 2, "38.00", "0.8mm 锆珠", "张研磨"),
+                (m1, 1, 5, 1, "52.00", "0.8mm 锆珠", "张研磨"),
+                (m1, 1, 4, 2, "47.50", "0.8mm 锆珠", "李工"),
+                (m1, 2, 6, 1, "60.00", "0.6mm 锆珠", "张研磨"),
+                (m1, 3, 3, 1, "41.00", "0.8mm 锆珠", "王师傅"),
+                (m1, 4, 5, 1, "55.00", "0.8mm 锆珠", "张研磨"),
+                (m1, 6, 4, 1, "36.00", "1.0mm 锆珠", "李工"),
+                (m2, 1, 4, 1, "60.00", "1.0mm 玻璃珠", "李工"),
+                (m2, 2, 3, 1, "75.00", "1.0mm 玻璃珠", "李工"),
+                (m2, 4, 6, 1, "30.00", "0.8mm 玻璃珠", "王师傅"),
+                (m2, 5, 2, 1, "60.00", "1.0mm 玻璃珠", "李工"),
+                (m2, 6, 5, 1, "48.00", "1.0mm 玻璃珠", "张研磨"),
+                (m3, 2, 4, 1, "25.00", "0.6mm 锆珠", "王师傅"),
+                (m3, 5, 3, 1, "30.00", "0.6mm 锆珠", "王师傅"),
+            ]
+            db.add_all(
+                [
                     GrindPass(
-                        mill_id=m1.id,
-                        started_at=now - timedelta(hours=3),
-                        pass_no=1,
-                        duration_min=Decimal("45.00"),
-                        media_type="0.8mm 锆珠",
-                        operator_name="张研磨",
-                    ),
-                    GrindPass(
-                        mill_id=m1.id,
-                        started_at=now - timedelta(hours=2),
-                        pass_no=2,
-                        duration_min=Decimal("38.00"),
-                        media_type="0.8mm 锆珠",
-                        operator_name="张研磨",
-                    ),
-                    GrindPass(
-                        mill_id=m2.id,
-                        started_at=now - timedelta(days=5),
-                        pass_no=1,
-                        duration_min=Decimal("60.00"),
-                        media_type="1.0mm 玻璃珠",
-                        operator_name="李工",
-                    ),
+                        mill_id=mill.id,
+                        started_at=now - timedelta(days=days_ago, hours=hours_ago),
+                        pass_no=pass_no,
+                        duration_min=Decimal(minutes),
+                        media_type=media,
+                        operator_name=operator,
+                    )
+                    for mill, days_ago, hours_ago, pass_no, minutes, media, operator in pass_specs
                 ]
             )
             db.commit()
